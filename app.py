@@ -1,6 +1,9 @@
 """VerityAI web app (Gradio). Run locally with:  python app.py"""
 import gradio as gr
 from verity.analyzer import analyze_file, IMAGE_EXT, VIDEO_EXT
+from verity.ai_detect import preload_model
+
+preload_model()
 
 BAND_STYLE = {
     "No significant manipulation indicators found": ("#16a34a", "✓"),

@@ -1,5 +1,5 @@
-"""Runs all the checks for one file and cleans up afterwards (privacy)."""
 import os
+import logging
 from PIL import Image
 
 from .metadata import analyze_metadata
@@ -11,6 +11,8 @@ from .video import analyze_video
 from .fusion import fuse, quality_notes_for
 from .report import build_report
 
+logger = logging.getLogger(__name__)
+
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
@@ -20,13 +22,13 @@ def secure_delete(path):
     try:
         if path and os.path.exists(path):
             os.remove(path)
-    except OSError:
-        pass
+    except OSError as e:
+        logger.warning("Failed to delete file %s: %s", path, e)
 
 
 def analyze_image_file(path, mask_gps=True):
-    img = Image.open(path)
-    w, h, fmt = img.width, img.height, img.format
+    with Image.open(path) as img:
+        w, h, fmt = img.width, img.height, img.format
 
     meta = analyze_metadata(path)
     ela = analyze_ela(path)

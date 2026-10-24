@@ -42,7 +42,8 @@ def ai_probability(pil_image):
 
 
 def analyze_ai(path):
-    prob = ai_probability(Image.open(path))
+    with Image.open(path) as img:
+        prob = ai_probability(img)
     if prob is None:
         return {"name": "AI-Generation Check", "available": False, "score": 0.0,
                 "flags": ["AI model could not be loaded, so this check was skipped."]}

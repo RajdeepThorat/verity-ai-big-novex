@@ -1,10 +1,14 @@
-"""Builds the downloadable PDF evidence report (privacy-safe)."""
 import os
+import shutil
+import time
+import logging
 import tempfile
 from datetime import datetime
 import numpy as np
 from PIL import Image
 from fpdf import FPDF
+
+logger = logging.getLogger(__name__)
 
 BAND_COLORS = {
     "No significant manipulation indicators found": (22, 163, 74),
@@ -20,23 +24,44 @@ def _safe(text):
     return str(text).encode("latin-1", "replace").decode("latin-1")
 
 
-def _add_image(pdf, arr, tmpdir, name, w=170):
+def cleanup_stale_reports(max_age_seconds=300):
+    """Clean up stale verity_report_* folders from the temp directory."""
+    temp_root = tempfile.gettempdir()
+    now = time.time()
+    try:
+        for entry in os.listdir(temp_root):
+            if entry.startswith("verity_report_"):
+                full_path = os.path.join(temp_root, entry)
+                try:
+                    mtime = os.path.getmtime(full_path)
+                    if now - mtime > max_age_seconds:
+                        if os.path.isdir(full_path):
+                            shutil.rmtree(full_path, ignore_errors=True)
+                        elif os.path.isfile(full_path):
+                            os.remove(full_path)
+                except Exception as e:
+                    logger.warning("Could not delete stale report %s: %s", full_path, e)
+    except Exception as e:
+        logger.warning("Failed scanning temp dir for stale reports: %s", e)
+
+
+def _add_image(pdf, arr, w=170):
+    """Add image directly from memory without saving temporary files to disk."""
     if arr is None:
         return
-    p = os.path.join(tmpdir, name + ".jpg")
     img = Image.fromarray(np.asarray(arr).astype(np.uint8))
     img.thumbnail((1200, 1200))
-    img.save(p, quality=85)
     h = w * img.height / img.width
     if pdf.get_y() + h > 270:
         pdf.add_page()
-    pdf.image(p, x=20, w=w)
+    pdf.image(img, x=20, w=w)
     pdf.ln(3)
 
 
 def build_report(file_name, kind, verdict, results, metadata, mask_gps,
                  images=None):
     """images: list of (title, numpy_array). Returns path of the PDF."""
+    cleanup_stale_reports()
     tmpdir = tempfile.mkdtemp(prefix="verity_report_")
     pdf = FPDF()
     pdf.set_auto_page_break(True, margin=15)
@@ -93,7 +118,7 @@ def build_report(file_name, kind, verdict, results, metadata, mask_gps,
         if pdf.get_y() > 230:
             pdf.add_page()
         pdf.cell(0, 7, _safe(title), new_x="LMARGIN", new_y="NEXT")
-        _add_image(pdf, arr, tmpdir, f"img{i}")
+        _add_image(pdf, arr)
 
     pdf.ln(2)
     pdf.set_font("Helvetica", "I", 8)

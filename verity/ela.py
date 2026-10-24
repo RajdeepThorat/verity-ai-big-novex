@@ -44,14 +44,15 @@ def _block_anomaly(ela_gray, image_gray, block=16):
 
 
 def analyze_ela(path, quality=90):
-    original = Image.open(path).convert("RGB")
-    is_jpeg = Image.open(path).format == "JPEG"
+    with Image.open(path) as img:
+        is_jpeg = img.format == "JPEG"
+        original = img.convert("RGB")
 
     buf = io.BytesIO()
     original.save(buf, "JPEG", quality=quality)
-    resaved = Image.open(io.BytesIO(buf.getvalue()))
-
-    diff = np.asarray(ImageChops.difference(original, resaved)).astype(np.float32)
+    buf.seek(0)
+    with Image.open(buf) as resaved:
+        diff = np.asarray(ImageChops.difference(original, resaved)).astype(np.float32)
     gray = diff.max(axis=2)
 
     image_gray = np.asarray(original.convert("L")).astype(np.float32)

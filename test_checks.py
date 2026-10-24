@@ -18,6 +18,9 @@ for folder in ["samples/genuine", "samples/fake"]:
         tmp = os.path.join(tempfile.mkdtemp(), name)
         shutil.copy(os.path.join(folder, name), tmp)
         kind, out = analyze_file(tmp)
+        if out is None:
+            print(f"\n[{folder.split('/')[-1].upper()}] {name} (skipped: could not read)")
+            continue
         v = out["verdict"]
         print(f"\n[{folder.split('/')[-1].upper()}] {name}")
         print(f"  RESULT: {v['band']}  (score {v['score']}, confidence {v['confidence']})")

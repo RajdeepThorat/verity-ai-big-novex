@@ -52,9 +52,15 @@ def run(file, mask_gps):
     if ext not in IMAGE_EXT | VIDEO_EXT:
         raise gr.Error("Unsupported file type. Use JPG, PNG, WEBP, MP4, MOV, AVI or WEBM.")
 
-    kind, out = analyze_file(path, mask_gps=mask_gps)
+    try:
+        kind, out = analyze_file(path, mask_gps=mask_gps)
+    except ValueError as e:
+        raise gr.Error(str(e))
+    except Exception as e:
+        raise gr.Error(f"Analysis failed: {str(e)}")
+
     if out is None:
-        raise gr.Error("Could not read this file.")
+        raise gr.Error("Could not read or verify this file. Please ensure it is a valid, uncorrupted image or video.")
 
     gallery = [(img, title) for title, img in out["images"] if img is not None]
     meta = dict(out["metadata"])
@@ -91,7 +97,8 @@ with gr.Blocks(title="VerityAI", delete_cache=(1800, 3600)) as demo:
 - **Inconclusive** is an honest answer: heavy compression (e.g. WhatsApp forwards) weakens many checks.
 """)
 
-    btn.click(run, inputs=[file_in, mask], outputs=[verdict, findings, gallery, meta, report])
+    btn.click(run, inputs=[file_in, mask], outputs=[verdict, findings, gallery, meta, report], concurrency_limit=1)
+    demo.queue(max_size=20, default_concurrency_limit=1)
 
 if __name__ == "__main__":
     demo.launch(css=CSS)

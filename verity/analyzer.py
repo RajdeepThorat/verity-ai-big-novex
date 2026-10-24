@@ -16,6 +16,47 @@ logger = logging.getLogger(__name__)
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
+MAX_IMAGE_SIZE = 20 * 1024 * 1024     # 20 MB
+MAX_VIDEO_SIZE = 50 * 1024 * 1024     # 50 MB
+MAX_IMAGE_PIXELS = 50_000_000         # 50 Megapixels
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
+
+def check_magic_bytes(path):
+    """Verify that file header matches a known image or video format."""
+    try:
+        with open(path, "rb") as f:
+            header = f.read(32)
+    except Exception:
+        return None
+
+    if len(header) < 4:
+        return None
+
+    # Common image magic bytes
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image"
+    if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        return "image"
+    if header.startswith(b"BM"):
+        return "image"
+    if header.startswith(b"II*\x00") or header.startswith(b"MM\x00*"):
+        return "image"
+    if header.startswith(b"RIFF") and len(header) >= 12 and header[8:12] == b"WEBP":
+        return "image"
+
+    # Common video magic bytes
+    if len(header) >= 8 and (header[4:8] in (b"ftyp", b"moov", b"mdat", b"wide")):
+        return "video"
+    if header.startswith(b"RIFF") and len(header) >= 12 and header[8:12] == b"AVI ":
+        return "video"
+    if header.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video"
+
+    return None
+
 
 def secure_delete(path):
     """Delete the uploaded file once analysis is finished."""
@@ -64,12 +105,26 @@ def analyze_video_file(path, mask_gps=True):
 
 
 def analyze_file(path, mask_gps=True):
+    if not path or not os.path.exists(path):
+        return None, None
+
     ext = os.path.splitext(path)[1].lower()
     try:
-        if ext in IMAGE_EXT:
+        file_size = os.path.getsize(path)
+        magic_kind = check_magic_bytes(path)
+        if magic_kind is None:
+            return None, None
+
+        if ext in IMAGE_EXT and magic_kind == "image":
+            if file_size > MAX_IMAGE_SIZE:
+                raise ValueError(f"Image file exceeds maximum upload size of {MAX_IMAGE_SIZE // (1024 * 1024)} MB.")
             return "image", analyze_image_file(path, mask_gps)
-        if ext in VIDEO_EXT:
+
+        if ext in VIDEO_EXT and magic_kind == "video":
+            if file_size > MAX_VIDEO_SIZE:
+                raise ValueError(f"Video file exceeds maximum upload size of {MAX_VIDEO_SIZE // (1024 * 1024)} MB.")
             return "video", analyze_video_file(path, mask_gps)
+
         return None, None
     finally:
         secure_delete(path)       # privacy: never keep the original upload

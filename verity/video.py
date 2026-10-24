@@ -49,6 +49,11 @@ def analyze_video(path, n_frames=16):
         cap.release()
         return None
 
+    duration_est = total / fps
+    if duration_est > 60.0:
+        cap.release()
+        raise ValueError(f"Video duration ({duration_est:.1f}s) exceeds maximum allowed 60 seconds.")
+
     # Determine keyframe indices to sample for AI + face checks
     if total <= n_frames:
         keyframe_indices = set(range(total))

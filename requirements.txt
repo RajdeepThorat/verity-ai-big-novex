@@ -1,0 +1,8 @@
+gradio==6.30.0
+numpy
+pillow
+opencv-python-headless==4.12.0.88
+matplotlib
+fpdf2
+transformers
+torch

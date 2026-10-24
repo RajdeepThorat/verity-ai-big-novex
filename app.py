@@ -37,11 +37,29 @@ def verdict_html(v):
             f"not proof of authenticity or manipulation.</p></div>")
 
 
+import html
+
+
 def findings_md(results):
     lines = ["| Check | Suspicion | What we found |", "|---|---|---|"]
     for r in results:
         s = f"{r['score']:.2f}" if r.get("available") else "skipped"
-        lines.append(f"| {r['name']} | {s} | {' '.join(r['flags'])} |")
+        flags_escaped = [html.escape(str(f)) for f in r.get("flags", [])]
+        if r.get("name") == "Provenance" and r.get("details"):
+            d = r["details"]
+            details_lines = []
+            if d.get("claim_generator"):
+                details_lines.append(f"<b>Generator:</b> {html.escape(str(d['claim_generator']))}")
+            if d.get("signer"):
+                details_lines.append(f"<b>Signer:</b> {html.escape(str(d['signer']))}")
+            if d.get("actions"):
+                details_lines.append(f"<b>Actions:</b> {html.escape(', '.join(str(a) for a in d['actions']))}")
+            if d.get("signature_valid") is not None:
+                val_str = "Valid" if d["signature_valid"] else "<span style='color:red'>INVALID / MODIFIED</span>"
+                details_lines.append(f"<b>Validity:</b> {val_str}")
+            if details_lines:
+                flags_escaped.append("<br>" + " | ".join(details_lines))
+        lines.append(f"| {html.escape(r['name'])} | {s} | {' '.join(flags_escaped)} |")
     return "\n".join(lines)
 
 

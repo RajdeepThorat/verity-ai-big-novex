@@ -11,6 +11,7 @@ WEIGHTS = {
     "Noise Consistency": 0.15,
     "Copy-Move": 0.15,
     "AI-Generation Check": 0.30,
+    "Provenance": 0.25,
     "Temporal Consistency": 0.05,
     "Face Region Consistency": 0.20,
 }
@@ -38,14 +39,15 @@ def fuse(results, quality_notes=None):
         w = WEIGHTS.get(r["name"], 0.1) * r.get("weight_factor", 1.0)
         total += w * r["score"]
         total_w += w
-    combined = total / total_w
+    combined = (total / total_w) if total_w > 0 else 0.0
 
     # Metadata, ELA, noise, and temporal cuts are SUPPORTING / INFORMATIONAL clues.
     # Only these checks can count as a decisive strong signal:
     decisive = {"Copy-Move": 0.8, "AI-Generation Check": 0.85,
-                "Face Region Consistency": 0.8}
+                "Face Region Consistency": 0.8, "Provenance": 0.85}
     strong = [r["name"] for r in usable
               if r["name"] in decisive and r["score"] >= decisive[r["name"]]]
+
     scores = [r["score"] for r in usable]
     disagreement = max(scores) - min(scores)
 
@@ -89,6 +91,16 @@ def fuse(results, quality_notes=None):
         reasons.append("Strong signal from: " + ", ".join(strong) + ".")
     if _metadata_score(usable) >= 0.5:
         reasons.append("Metadata shows editing or AI software was used on this file.")
+
+    # Camera provenance verification: can raise confidence on clean images,
+    # but never turns a visibly flagged result Clean without a note
+    prov_result = next((r for r in usable if r["name"] == "Provenance"), None)
+    if prov_result and prov_result.get("details", {}).get("is_camera_verified"):
+        if band != BAND_CLEAN:
+            reasons.append("Hardware camera credentials present, but visual checks show conflicting manipulation indicators.")
+        else:
+            confidence = "High"
+            reasons.append("Provenance verified: image cryptographically signed by camera / capture hardware.")
 
     return {"band": band, "score": round(combined, 3), "confidence": confidence,
             "reasons": reasons}

@@ -7,3 +7,4 @@ fpdf2
 transformers==5.20.2
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.1+cpu
+c2pa-python>=0.38.0

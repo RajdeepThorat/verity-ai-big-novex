@@ -7,6 +7,7 @@ from .ela import analyze_ela
 from .noise import analyze_noise
 from .copymove import analyze_copymove
 from .ai_detect import analyze_ai
+from .provenance import analyze_provenance
 from .video import analyze_video
 from .fusion import fuse, quality_notes_for
 from .report import build_report
@@ -76,7 +77,8 @@ def analyze_image_file(path, mask_gps=True):
     noise = analyze_noise(path)
     cm = analyze_copymove(path)
     ai = analyze_ai(path)
-    results = [meta, ela, noise, cm, ai]
+    prov = analyze_provenance(path)
+    results = [meta, ela, noise, cm, ai, prov]
 
     verdict = fuse(results, quality_notes_for(w, h, fmt == "JPEG"))
     images = [("Error Level Analysis heatmap", ela.get("heatmap")),

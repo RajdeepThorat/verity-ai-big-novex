@@ -7,7 +7,7 @@ and place the result in one of three bands. We NEVER say "100% real".
 
 WEIGHTS = {
     "Metadata": 0.15,
-    "Error Level Analysis": 0.25,
+    "Error Level Analysis": 0.01,
     "Noise Consistency": 0.15,
     "Copy-Move": 0.15,
     "AI-Generation Check": 0.30,
@@ -49,6 +49,14 @@ def fuse(results, quality_notes=None):
     scores = [r["score"] for r in usable]
     disagreement = max(scores) - min(scores)
 
+    # Check if any non-ELA check indicates suspicion
+    non_ela_usable = [r for r in usable if r["name"] != "Error Level Analysis"]
+    non_ela_suspicious = (
+        any(r["score"] >= 0.3 for r in non_ela_usable)
+        or _metadata_score(usable) >= 0.5
+        or any(r["name"] in decisive and r["score"] >= 0.5 for r in usable)
+    )
+
     # Decide the band. One decisive signal is enough: a fully AI-generated
     # image or a clear copy-paste may leave the other checks quiet.
     if combined >= 0.55 or strong:
@@ -57,6 +65,10 @@ def fuse(results, quality_notes=None):
           or any(r["name"] in decisive and r["score"] >= 0.5 for r in usable)):
         band = BAND_UNSURE
     else:
+        band = BAND_CLEAN
+
+    # ELA is a supporting visual aid: it must NEVER alone push a result above Clean
+    if not non_ela_suspicious and not strong and band != BAND_CLEAN:
         band = BAND_CLEAN
 
     # Decide how confident we are in that band

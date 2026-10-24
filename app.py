@@ -3,8 +3,6 @@ import gradio as gr
 from verity.analyzer import analyze_file, IMAGE_EXT, VIDEO_EXT
 from verity.ai_detect import preload_model
 
-preload_model()
-
 BAND_STYLE = {
     "No significant manipulation indicators found": ("#16a34a", "✓"),
     "Inconclusive": ("#d97706", "?"),
@@ -104,4 +102,5 @@ with gr.Blocks(title="VerityAI", delete_cache=(1800, 3600)) as demo:
     demo.queue(max_size=20, default_concurrency_limit=1)
 
 if __name__ == "__main__":
+    preload_model()
     demo.launch(css=CSS)

@@ -46,35 +46,54 @@ def analyze_video(path, n_frames=16):
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25
     if total <= 0:
+        cap.release()
         return None
 
-    # 1) consecutive-frame differences over the whole video (downscaled)
-    diffs, prev = [], None
-    step = max(1, total // 400)            # at most ~400 checks
-    for i in range(0, total, step):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+    # Determine keyframe indices to sample for AI + face checks
+    if total <= n_frames:
+        keyframe_indices = set(range(total))
+    else:
+        keyframe_indices = set(np.linspace(0, total - 1, n_frames).astype(int))
+
+    # Read frames sequentially in a single pass
+    # Compute differences between truly consecutive frames (downscaled)
+    diffs = []
+    prev_g = None
+    sampled_frames_map = {}
+    frame_idx = 0
+
+    while True:
         ok, f = cap.read()
         if not ok:
             break
-        g = cv2.cvtColor(cv2.resize(f, (160, 90)), cv2.COLOR_BGR2GRAY).astype(np.float32)
-        if prev is not None:
-            diffs.append(float(np.mean(np.abs(g - prev))))
-        prev = g
 
-    # 2) sampled key frames for AI + face checks
-    idxs = np.linspace(0, total - 1, n_frames).astype(int)
+        g = cv2.cvtColor(cv2.resize(f, (160, 90)), cv2.COLOR_BGR2GRAY).astype(np.float32)
+        if prev_g is not None:
+            diffs.append(float(np.mean(np.abs(g - prev_g))))
+        prev_g = g
+
+        if frame_idx in keyframe_indices:
+            sampled_frames_map[frame_idx] = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+
+        frame_idx += 1
+
+    cap.release()
+
+    if frame_idx == 0:
+        return None
+
+    actual_total = frame_idx
+    duration = actual_total / fps
+
+    sorted_indices = sorted(sampled_frames_map.keys())
     frames, ai_scores, face_ratios, times = [], [], [], []
-    for i in idxs:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(i))
-        ok, f = cap.read()
-        if not ok:
-            continue
-        rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+    for i in sorted_indices:
+        rgb = sampled_frames_map[i]
         frames.append(rgb)
         times.append(i / fps)
         ai_scores.append(ai_probability(Image.fromarray(rgb)))
 
-        gray = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
         faces = _face.detectMultiScale(gray, 1.2, 5, minSize=(60, 60))
         if len(faces):
             x, y, w, h = max(faces, key=lambda b: b[2] * b[3])
@@ -84,20 +103,25 @@ def analyze_video(path, n_frames=16):
             cv2.rectangle(rgb, (x, y), (x + w, y + h), (0, 255, 120), 2)
         else:
             face_ratios.append(None)
-    cap.release()
 
     results = []
 
-    # Temporal consistency score
+    # Temporal consistency / edit points (informational only; cuts do not imply manipulation)
     d = np.array(diffs)
+    spikes = 0
     if len(d) > 5:
         med = np.median(d)
         mad = np.median(np.abs(d - med)) * 1.4826 + 1e-6
         spikes = int(np.sum((d - med) / mad > 8))
-        t_score = 0.0 if spikes == 0 else min(1.0, 0.25 + spikes * 0.15)
-        results.append({"name": "Temporal Consistency", "score": t_score, "available": True,
-                        "flags": [f"{spikes} sudden jump(s) between frames (cuts or splices)."
-                                  if spikes else "Frames change smoothly over time."]})
+
+    t_score = min(0.15, spikes * 0.03)
+    if spikes > 0:
+        flag = f"{spikes} edit point(s) detected (informational; scene cuts are common in normal video)."
+    else:
+        flag = "Frames change smoothly over time (no edit points detected)."
+
+    results.append({"name": "Temporal Consistency", "score": float(t_score), "available": True,
+                    "flags": [flag]})
 
     # Face region consistency score
     fr = [r for r in face_ratios if r is not None]
@@ -124,9 +148,9 @@ def analyze_video(path, n_frames=16):
         results.append({"name": "AI-Generation Check", "score": 0.0, "available": False,
                         "flags": ["AI model could not be loaded, so this check was skipped."]})
 
-    chart = _timeline_chart(times, ai_scores, face_ratios, d, total / fps)
+    chart = _timeline_chart(times, ai_scores, face_ratios, d, duration)
     return {"results": results, "frames": frames, "chart": chart,
-            "duration": total / fps, "fps": fps, "metadata": video_metadata(path)}
+            "duration": duration, "fps": fps, "metadata": video_metadata(path)}
 
 
 def _timeline_chart(times, ai_scores, face_ratios, diffs, duration):

@@ -11,7 +11,7 @@ WEIGHTS = {
     "Noise Consistency": 0.15,
     "Copy-Move": 0.15,
     "AI-Generation Check": 0.30,
-    "Temporal Consistency": 0.25,
+    "Temporal Consistency": 0.05,
     "Face Region Consistency": 0.20,
 }
 
@@ -40,10 +40,10 @@ def fuse(results, quality_notes=None):
         total_w += w
     combined = total / total_w
 
-    # Metadata, ELA and noise are SUPPORTING clues (easily affected by normal
-    # editing or textures). Only these checks can count as a strong signal:
+    # Metadata, ELA, noise, and temporal cuts are SUPPORTING / INFORMATIONAL clues.
+    # Only these checks can count as a decisive strong signal:
     decisive = {"Copy-Move": 0.8, "AI-Generation Check": 0.85,
-                "Temporal Consistency": 0.85, "Face Region Consistency": 0.8}
+                "Face Region Consistency": 0.8}
     strong = [r["name"] for r in usable
               if r["name"] in decisive and r["score"] >= decisive[r["name"]]]
     scores = [r["score"] for r in usable]

@@ -98,9 +98,23 @@ def build_report(file_name, kind, verdict, results, metadata, mask_gps,
         status = f"{res['score']:.2f}" if res.get("available") else "skipped"
         pdf.cell(0, 6, _safe(f"{res['name']}  (suspicion: {status})"),
                  new_x="LMARGIN", new_y="NEXT")
-        pdf.set_font("Helvetica", "", 9)
         for f in res["flags"]:
             pdf.multi_cell(0, 5, _safe("   - " + f), new_x="LMARGIN", new_y="NEXT")
+        if res.get("name") == "Provenance" and res.get("details"):
+            d = res["details"]
+            pdf.set_font("Helvetica", "I", 8.5)
+            if d.get("claim_generator"):
+                pdf.multi_cell(0, 4.5, _safe(f"     Generator: {d['claim_generator']}"), new_x="LMARGIN", new_y="NEXT")
+            if d.get("signer"):
+                pdf.multi_cell(0, 4.5, _safe(f"     Signer: {d['signer']}"), new_x="LMARGIN", new_y="NEXT")
+            if d.get("actions"):
+                pdf.multi_cell(0, 4.5, _safe(f"     Actions: {', '.join(str(a) for a in d['actions'])}"), new_x="LMARGIN", new_y="NEXT")
+            if d.get("digital_source_type"):
+                pdf.multi_cell(0, 4.5, _safe(f"     DigitalSourceType: {d['digital_source_type']}"), new_x="LMARGIN", new_y="NEXT")
+            if d.get("signature_valid") is not None:
+                v_str = "Cryptographically Valid" if d["signature_valid"] else "INVALID / TAMPERED AFTER SIGNING"
+                pdf.multi_cell(0, 4.5, _safe(f"     Signature: {v_str}"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 9)
     pdf.ln(2)
 
     if metadata:
